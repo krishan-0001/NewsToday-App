@@ -1,12 +1,13 @@
 package com.example.newstoady
 
-import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -24,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -43,10 +47,8 @@ import kotlin.collections.emptyList
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-
-
-
 fun HomePage(newsViewModel: NewsViewModel){
+    val state by newsViewModel.newsUiState.collectAsState()
 
     val articles by newsViewModel.articles.observeAsState(emptyList())
     val isLoading by newsViewModel.isLoading.observeAsState(false)
@@ -54,14 +56,28 @@ fun HomePage(newsViewModel: NewsViewModel){
         refreshing = isLoading,
         onRefresh = {newsViewModel.fetchNewsTopHeadlines()})
 
-        Column() {
+        Column{
             CategoryRow(newsViewModel)
             Box(modifier = Modifier
                 .fillMaxSize()
                 .pullRefresh(refreshState)){
-                LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    items(articles){article->
-                        ArticleItem(article)
+                when(state){
+                    is NewsUiState.Loading->{
+                        CircularProgressIndicator(
+                            modifier = Modifier.align(Alignment.Center)
+
+                        )
+                    }
+                    is NewsUiState.Success->{
+                        LazyColumn{
+                            items(articles){article->
+                                ArticleItem(article)
+                            }
+                        }
+                    }
+                    is NewsUiState.Error->{
+                        ErrorScreen(message = (state as NewsUiState.Error).message,
+                            onRetry = {newsViewModel.fetchNewsTopHeadlines(category = "general")})
                     }
                 }
                 PullRefreshIndicator(
@@ -90,6 +106,9 @@ fun ArticleItem(article: Article){
 //                    val intent = Intent(Intent.ACTION_VIEW,Uri.parse(url))
 //                    context.startActivity(intent)
                     val customTabsIntent = CustomTabsIntent.Builder()
+                        .setShowTitle(true)
+                        .setToolbarColor(android.graphics.Color.CYAN)
+                        .setShareState(CustomTabsIntent.SHARE_STATE_ON)
                         .build()
                     customTabsIntent.launchUrl(context, Uri.parse(url))
 
@@ -98,13 +117,14 @@ fun ArticleItem(article: Article){
         elevation = CardDefaults.cardElevation(6.dp),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column() {
+        Column{
             AsyncImage(
-                model = article.urlToImage,
+                model = article.urlToImage ?:"",
                 contentDescription = "Content Image",
+                contentScale = ContentScale.FillWidth,
                 modifier = Modifier.fillMaxWidth()
-                    .height(200.dp),
-                contentScale = ContentScale.Crop
+                    .aspectRatio(16f/9f)
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
             )
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(text = article.title ?: "No title available",
@@ -166,13 +186,25 @@ fun CategoryRow(newsViewModel: NewsViewModel) {
     ) {
 
         items(categories) { category ->
-
             Text(
                 text = category.uppercase(),
+                color = if (selectedCategory == category) {
+                    Color.White
+                } else {
+                    Color.Black
+                },
                 modifier = Modifier
                     .padding(12.dp)
-                    .clickable {
-
+                    .background(
+                        if (selectedCategory==category){
+                            Color.Cyan
+                        }
+                        else{
+                            Color.LightGray
+                        }
+                    )
+                    .clickable
+                    {
                         selectedCategory = category
                         newsViewModel.fetchNewsTopHeadlines(category)
 
